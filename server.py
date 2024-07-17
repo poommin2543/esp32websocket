@@ -14,7 +14,7 @@ async def handler(websocket, path):
         print(f"Error: {e}")
 
 async def main():
-    async with websockets.serve(handler, "192.168.10.155", 5000):
+    async with websockets.serve(handler, "192.168.10.155", 5001):
         print("Server started on ws://192.168.10.155:5000")
         await asyncio.Future()  # Run forever
 
