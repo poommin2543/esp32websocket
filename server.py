@@ -6,7 +6,7 @@ async def handler(websocket, path):
     try:
         async for message in websocket:
             print(f"Received message: {message}")
-            response = "Hello from server"
+            response = "200 OK"
             await websocket.send(response)
     except websockets.ConnectionClosed:
         print("Client disconnected")
@@ -14,7 +14,7 @@ async def handler(websocket, path):
         print(f"Error: {e}")
 
 async def main():
-    async with websockets.serve(handler, "192.168.10.155", 5001):
+    async with websockets.serve(handler, "192.168.10.155", 5000):
         print("Server started on ws://192.168.10.155:5000")
         await asyncio.Future()  # Run forever
 
