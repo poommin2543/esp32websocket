@@ -1,31 +1,22 @@
 #include <WiFi.h>
-#include <WebSocketsClient.h>
+#include <WebSocketClient.h>
 #include <SoftwareSerial.h>
-
 SoftwareSerial mySerial(21, 22); // RX, TX
 unsigned int pm1 = 0;
 unsigned int pm2_5 = 0;
 unsigned int pm10 = 0;
 const char* ssid = "ACSElab";
 const char* password = "acselab1234";
-const char* host = "192.168.10.155";
-const int port = 5000;
-const char* path = "/";
+char path[] = "/";
+char host[] = "192.168.10.155";
+int port = 5000;
 
-// Create an instance of the WebSocketsClient
-WebSocketsClient webSocket;
+WebSocketClient webSocketClient;
+WiFiClient client;
 
-void setup() {
-  Serial.begin(115200);
-  mySerial.begin(9600);
-  delay(10);
-
-  // We start by connecting to a Wi-Fi network
-  Serial.println();
-  Serial.println();
+void connectToWiFi() {
   Serial.print("Connecting to ");
   Serial.println(ssid);
-
   WiFi.begin(ssid, password);
 
   while (WiFi.status() != WL_CONNECTED) {
@@ -37,20 +28,34 @@ void setup() {
   Serial.println("WiFi connected");
   Serial.println("IP address: ");
   Serial.println(WiFi.localIP());
+}
 
-  // Connect to the WebSocket server
-  webSocket.begin(host, port, path);
+void connectToWebSocket() {
+  if (client.connect(host, port)) {
+    Serial.println("Connected to server");
+    webSocketClient.path = path;
+    webSocketClient.host = host;
+    if (webSocketClient.handshake(client)) {
+      Serial.println("Handshake successful");
+    } else {
+      Serial.println("Handshake failed.");
+    }
+  } else {
+    Serial.println("Connection to server failed.");
+  }
+}
 
-  // Set up event handlers
-  webSocket.onEvent(webSocketEvent);
-
-  // Give the WebSocket some time to connect
+void setup() {
+  Serial.begin(115200);
+  delay(10);
+  while (!Serial) ;
+  mySerial.begin(9600);
+  connectToWiFi();
   delay(5000);
+  connectToWebSocket();
 }
 
 void loop() {
-  webSocket.loop(); // Maintain WebSocket connection
-
   int index = 0;
   char value;
   char previousValue;
@@ -64,51 +69,51 @@ void loop() {
 
     if (index == 4 || index == 6 || index == 8 || index == 10 || index == 12 || index == 14) {
       previousValue = value;
-    } else if (index == 5) {
+    }
+    else if (index == 5) {
       pm1 = 256 * previousValue + value;
-    } else if (index == 7) {
+      Serial.print("{ ");
+      Serial.print("\"pm1\": ");
+      Serial.print(pm1);
+      Serial.print(" ug/m3");
+      Serial.print(", ");
+    }
+    else if (index == 7) {
       pm2_5 = 256 * previousValue + value;
-    } else if (index == 9) {
+      Serial.print("\"pm2_5\": ");
+      Serial.print(pm2_5);
+      Serial.print(" ug/m3");
+      Serial.print(", ");
+    }
+    else if (index == 9) {
       pm10 = 256 * previousValue + value;
+      Serial.print("\"pm10\": ");
+      Serial.print(pm10);
+      Serial.print(" ug/m3");
     } else if (index > 15) {
       break;
     }
     index++;
   }
   while (mySerial.available()) mySerial.read();
+  Serial.println(" }");
+  if (client.connected()) {
+    String data;
+    webSocketClient.getData(data);
+    if (data.length() > 0) {
+      Serial.print("Received data: ");
+      Serial.println(data);
+    }
 
-  // Print values to the Serial Monitor
-  Serial.print("{ ");
-  Serial.print("\"pm1\": ");
-  Serial.print(pm1);
-  Serial.print(" ug/m3, ");
-  Serial.print("\"pm2_5\": ");
-  Serial.print(pm2_5);
-  Serial.print(" ug/m3, ");
-  Serial.print("\"pm10\": ");
-  Serial.print(pm10);
-  Serial.println(" ug/m3 }");
+    //    data = "15";  // Ensure data is a string
+    //    webSocketClient.sendData(pm2_5);
+    String pm2_5_str = String(pm2_5);  // Convert pm2_5 to a string
+    webSocketClient.sendData(pm2_5_str.c_str());
 
-  // Send data over WebSocket
-  String jsonData = "{ \"pm1\": " + String(pm1) + ", \"pm2_5\": " + String(pm2_5) + ", \"pm10\": " + String(pm10) + " }";
-  webSocket.sendTXT(jsonData);
-
-  delay(1000); // wait a second before next loop
-}
-
-void webSocketEvent(WStype_t type, uint8_t *payload, size_t length) {
-  switch(type) {
-    case WStype_DISCONNECTED:
-      Serial.printf("[WSc] Disconnected!\n");
-      break;
-    case WStype_CONNECTED:
-      Serial.printf("[WSc] Connected to url: %s\n", payload);
-      break;
-    case WStype_TEXT:
-      Serial.printf("[WSc] get text: %s\n", payload);
-      break;
-    case WStype_BIN:
-      Serial.printf("[WSc] get binary length: %u\n", length);
-      break;
+  } else {
+    Serial.println("Client disconnected. Reconnecting...");
+    connectToWebSocket();
   }
+
+  delay(500);
 }
